@@ -1,4 +1,4 @@
-# RAG & GraphRAG Knowledge Engine 🧠
+# RAG & GraphRAG Knowledge Engine 
 
 [![CI](https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine/actions/workflows/ci.yml/badge.svg)](https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11-blue)
@@ -9,7 +9,7 @@ A **production retrieval-augmented generation system** that combines dense vecto
 
 ---
 
-## 🏗️ Architecture
+ Architecture
 
 ```
 User Query
@@ -29,7 +29,7 @@ LLM Generator (Gemini 1.5 Flash / GPT-4o-mini)
 Grounded Answer + Source Citations
 ```
 
-## 📊 Metrics
+## Metrics
 
 | Metric | Value |
 |--------|-------|
@@ -40,7 +40,7 @@ Grounded Answer + Source Citations
 
 ---
 
-## 🚀 Quick Start
+## Quick Start
 
 ```bash
 git clone https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine.git
@@ -65,7 +65,7 @@ curl -X POST http://localhost:8001/query \
 
 ---
 
-## 📡 API Reference
+##  API Reference
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -77,7 +77,7 @@ curl -X POST http://localhost:8001/query \
 
 ---
 
-## 📁 Structure
+##  Structure
 
 ```
 RAG-GraphRAG-Knowledge-Engine/
