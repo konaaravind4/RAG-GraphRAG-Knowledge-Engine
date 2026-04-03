@@ -1,136 +1,121 @@
 """
-FastAPI endpoints for the RAG GraphRAG Knowledge Engine.
-"""
-from __future__ import annotations
+api/main.py — FastAPI REST service for the RAG + GraphRAG Knowledge Engine.
 
-import logging
+Endpoints:
+    POST /ask          — ask a question and get a grounded answer
+    POST /index        — index a list of documents
+    GET  /health       — health check
+"""
+
 import os
+import logging
 from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel, Field
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from rag.retriever import VectorRetriever, HybridRetriever, RetrievalConfig
+from rag.generator import generate_answer
 
-from rag.vector_store import VectorStore
-from rag.graph_retriever import GraphRetriever
-from rag.hybrid_retriever import HybridRetriever
-from rag.generator import RAGGenerator
-
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ── Global components ──────────────────────────────────────────────────────
 
-vector_store: Optional[VectorStore] = None
-graph_retriever: Optional[GraphRetriever] = None
-hybrid_retriever: Optional[HybridRetriever] = None
-generator: Optional[RAGGenerator] = None
-text_splitter = RecursiveCharacterTextSplitter(chunk_size=512, chunk_overlap=64)
+# ─── Global State ─────────────────────────────────────────────────────────────
+
+_retriever: Optional[HybridRetriever] = None
+_vector_store: Optional[VectorRetriever] = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global vector_store, graph_retriever, hybrid_retriever, generator
-    vector_store = VectorStore()
-    graph_retriever = GraphRetriever()
-    hybrid_retriever = HybridRetriever(
-        vector_store=vector_store,
-        graph_retriever=graph_retriever,
-        lambda_weight=float(os.getenv("RETRIEVAL_LAMBDA", "0.6")),
+    global _retriever, _vector_store
+    logger.info("Initialising RAG retriever …")
+    _vector_store = VectorRetriever(
+        model_name=os.getenv("EMBED_MODEL", "BAAI/bge-base-en-v1.5")
     )
-    generator = RAGGenerator(provider=os.getenv("LLM_PROVIDER", "gemini"))
+    _retriever = HybridRetriever(
+        vector_retriever=_vector_store,
+        graph_url=os.getenv("NEO4J_URL"),
+        graph_user=os.getenv("NEO4J_USER", "neo4j"),
+        graph_password=os.getenv("NEO4J_PASSWORD", "password"),
+    )
+    logger.info("RAG engine ready.")
     yield
-    graph_retriever.close()
 
+
+# ─── App ──────────────────────────────────────────────────────────────────────
 
 app = FastAPI(
     title="RAG & GraphRAG Knowledge Engine",
+    description="Hybrid retrieval-augmented generation: FAISS vector search + Neo4j graph traversal.",
     version="1.0.0",
     lifespan=lifespan,
 )
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 
-# ── Schemas ─────────────────────────────────────────────────────────────────
+# ─── Schemas ──────────────────────────────────────────────────────────────────
 
-class QueryRequest(BaseModel):
-    query: str = Field(..., min_length=3, max_length=500)
-    k: int = Field(5, ge=1, le=20)
-    lambda_weight: Optional[float] = Field(None, ge=0.0, le=1.0)
-    return_sources: bool = True
+class IndexRequest(BaseModel):
+    documents: list[str] = Field(..., min_length=1, max_length=10000)
 
 
-class IngestRequest(BaseModel):
-    content: str = Field(..., min_length=10)
-    source: str = ""
-    chunk: bool = True
+class AskRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    top_k: int = Field(5, ge=1, le=20)
+    lambda_: float = Field(0.6, ge=0.0, le=1.0)
+    model: str = Field("gpt-4o-mini")
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+class ChunkResponse(BaseModel):
+    text: str
+    source: str
+    score: float
+    retrieval_method: str
+
+
+class AskResponse(BaseModel):
+    query: str
+    answer: str
+    chunks: list[ChunkResponse]
+
+
+# ─── Endpoints ────────────────────────────────────────────────────────────────
 
 @app.get("/health")
-async def health() -> dict:
-    return {
-        "status": "ok",
-        "vector_docs": len(vector_store.documents) if vector_store else 0,
-    }
+async def health():
+    return {"status": "ok", "indexed_docs": len(_vector_store._docs) if _vector_store else 0}
 
 
-@app.post("/ingest")
-async def ingest(req: IngestRequest) -> dict:
-    """Ingest text content into the vector + graph stores."""
-    doc = Document(page_content=req.content, metadata={"source": req.source})
-    docs = text_splitter.split_documents([doc]) if req.chunk else [doc]
-    vector_store.add_documents(docs)
-    for d in docs:
-        graph_retriever.ingest_document(d)
-    return {"ingested_chunks": len(docs), "source": req.source}
+@app.post("/index")
+async def index_documents(req: IndexRequest):
+    if _vector_store is None:
+        raise HTTPException(status_code=503, detail="Retriever not initialised.")
+    try:
+        _vector_store.build(req.documents)
+        return {"indexed": len(req.documents)}
+    except Exception as exc:
+        logger.exception("Indexing failed")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.post("/upload")
-async def upload_file(file: UploadFile = File(...)) -> dict:
-    """Upload a text file for ingestion."""
-    content = (await file.read()).decode("utf-8", errors="replace")
-    doc = Document(page_content=content, metadata={"source": file.filename})
-    chunks = text_splitter.split_documents([doc])
-    vector_store.add_documents(chunks)
-    return {"filename": file.filename, "chunks": len(chunks)}
-
-
-@app.post("/query")
-async def query(req: QueryRequest) -> dict:
-    """Query the knowledge engine with hybrid retrieval + LLM generation."""
-    if not vector_store or not generator:
-        raise HTTPException(status_code=503, detail="Engine not ready")
-
-    if req.lambda_weight is not None:
-        hybrid_retriever.lambda_weight = req.lambda_weight
-
-    chunks = hybrid_retriever.retrieve(req.query, k=req.k)
-    docs = [c.document for c in chunks]
-    result = generator.generate_with_sources(req.query, docs)
-
-    return {
-        **result,
-        "retrieval_chunks": [
-            {
-                "content": c.document.page_content[:200],
-                "combined_score": round(c.combined_score, 4),
-                "source_type": c.source,
-            }
-            for c in chunks
-        ],
-    }
-
-
-@app.post("/save-index")
-async def save_index() -> dict:
-    vector_store.save()
-    return {"status": "saved"}
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8001, reload=False)
+@app.post("/ask", response_model=AskResponse)
+async def ask(req: AskRequest):
+    if _retriever is None:
+        raise HTTPException(status_code=503, detail="Retriever not initialised.")
+    if not _vector_store or not _vector_store._docs:
+        raise HTTPException(status_code=400, detail="No documents indexed. POST /index first.")
+    try:
+        cfg = RetrievalConfig(top_k=req.top_k, lambda_=req.lambda_)
+        chunks = _retriever.retrieve(req.query, cfg)
+        context_texts = [c.text for c in chunks]
+        answer = generate_answer(req.query, context_texts, model=req.model)
+        return AskResponse(
+            query=req.query,
+            answer=answer,
+            chunks=[ChunkResponse(**c.__dict__) for c in chunks],
+        )
+    except Exception as exc:
+        logger.exception("Query failed")
+        raise HTTPException(status_code=500, detail=str(exc))

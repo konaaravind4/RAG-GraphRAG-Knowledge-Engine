@@ -1,96 +1,105 @@
 """
-Unit tests for RAG/GraphRAG Knowledge Engine.
+tests/test_retriever.py — Unit tests for the RAG retriever (no live Neo4j or OpenAI needed).
 """
-from __future__ import annotations
 
 import pytest
 from unittest.mock import MagicMock, patch
-from langchain.schema import Document
 
 
-class TestVectorStore:
-    @patch("rag.vector_store.HuggingFaceEmbeddings")
-    @patch("rag.vector_store.faiss")
-    def test_add_and_search(self, mock_faiss, mock_embed_cls):
-        from rag.vector_store import VectorStore
+# ─── RetrievalConfig ──────────────────────────────────────────────────────────
+
+class TestRetrievalConfig:
+    def test_defaults(self):
+        from rag.retriever import RetrievalConfig
+        cfg = RetrievalConfig()
+        assert cfg.top_k == 5
+        assert cfg.lambda_ == 0.6
+
+    def test_custom(self):
+        from rag.retriever import RetrievalConfig
+        cfg = RetrievalConfig(top_k=10, lambda_=0.3)
+        assert cfg.top_k == 10
+        assert cfg.lambda_ == 0.3
+
+
+# ─── VectorRetriever ─────────────────────────────────────────────────────────
+
+class TestVectorRetriever:
+    @patch("rag.retriever.faiss", create=True)
+    @patch("rag.retriever.VectorRetriever._get_embedder")
+    def test_build_and_search(self, mock_get_embedder, mock_faiss):
+        """Test build + search interaction with mocked FAISS and embedder."""
         import numpy as np
+        from rag.retriever import VectorRetriever, RetrievalConfig
 
+        # Mock embedder
         mock_embedder = MagicMock()
-        mock_embedder.embed_documents.return_value = [[0.1, 0.2, 0.3]]
-        mock_embedder.embed_query.return_value = [0.1, 0.2, 0.3]
-        mock_embed_cls.return_value = mock_embedder
+        mock_embedder.encode.return_value = np.array([[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]], dtype="float32")
+        mock_get_embedder.return_value = mock_embedder
 
+        # Mock FAISS index
         mock_index = MagicMock()
-        mock_index.search.return_value = (np.array([[0.95]]), np.array([[0]]))
-        mock_faiss.IndexFlatIP.return_value = mock_index
+        mock_index.search.return_value = (
+            np.array([[0.9, 0.7]]),
+            np.array([[0, 1]])
+        )
 
-        store = VectorStore()
-        doc = Document(page_content="Hello world", metadata={"source": "test"})
-        store.add_documents([doc])
+        import faiss
+        faiss.IndexFlatIP = MagicMock(return_value=mock_index)
 
-        results = store.search("Hello world", k=1)
-        assert len(results) == 1
-        assert results[0][0].page_content == "Hello world"
-        assert results[0][1] == pytest.approx(0.95)
+        docs = ["Paris is the capital of France.", "Berlin is the capital of Germany."]
+        retriever = VectorRetriever()
+        retriever.build(docs)
+        results = retriever.search("capital of France", k=2)
 
-    @patch("rag.vector_store.HuggingFaceEmbeddings")
-    @patch("rag.vector_store.faiss")
-    def test_search_empty_store_returns_empty(self, mock_faiss, mock_embed_cls):
-        from rag.vector_store import VectorStore
+        assert len(results) == 2
+        assert results[0].retrieval_method == "vector"
+        assert results[0].score > 0
 
-        mock_embed_cls.return_value = MagicMock()
-        store = VectorStore()
-        results = store.search("anything", k=5)
-        assert results == []
+    def test_search_raises_when_not_built(self):
+        from rag.retriever import VectorRetriever
+        r = VectorRetriever()
+        with pytest.raises(RuntimeError, match="build"):
+            r.search("test")
 
+
+# ─── HybridRetriever (vector-only mode) ──────────────────────────────────────
 
 class TestHybridRetriever:
-    def test_fusion_scoring(self):
-        from rag.hybrid_retriever import HybridRetriever, RetrievedChunk
+    def test_retrieve_vector_only(self):
+        """HybridRetriever should work with no graph configured."""
+        from rag.retriever import VectorRetriever, HybridRetriever, RetrievalConfig, RetrievedChunk
 
-        mock_vec = MagicMock()
-        mock_graph = MagicMock()
+        mock_vector = MagicMock(spec=VectorRetriever)
+        mock_vector.search.return_value = [
+            RetrievedChunk(text="Paris is in France.", source="doc_0", score=0.9, retrieval_method="vector"),
+            RetrievedChunk(text="London is in England.", source="doc_1", score=0.7, retrieval_method="vector"),
+        ]
 
-        doc1 = Document(page_content="Vector doc", metadata={})
-        doc2 = Document(page_content="Graph doc", metadata={})
+        retriever = HybridRetriever(vector_retriever=mock_vector, graph_url=None)
+        cfg = RetrievalConfig(top_k=2, lambda_=1.0)
+        results = retriever.retrieve("Paris", cfg)
 
-        mock_vec.search.return_value = [(doc1, 0.9)]
-        mock_graph.retrieve.return_value = [doc2]
-
-        retriever = HybridRetriever(mock_vec, mock_graph, lambda_weight=0.6, top_k=5)
-        chunks = retriever.retrieve("test query", k=2)
-
-        assert len(chunks) >= 1
-        for chunk in chunks:
-            assert chunk.combined_score >= 0.0
-
-    def test_combined_score_formula(self):
-        from rag.hybrid_retriever import RetrievedChunk
-        from langchain.schema import Document
-
-        chunk = RetrievedChunk(
-            document=Document(page_content="x"),
-            vector_score=0.8,
-            graph_score=0.6,
-        )
-        λ = 0.6
-        expected = λ * 0.8 + (1 - λ) * 0.6
-        chunk.combined_score = expected
-        assert chunk.combined_score == pytest.approx(0.72)
+        assert len(results) == 2
+        assert results[0].score >= results[1].score
 
 
-class TestRAGGenerator:
-    @patch("rag.generator.genai" if True else "rag.generator.OpenAI")
-    def test_build_context_truncates(self, _):
-        from rag.generator import RAGGenerator
+# ─── FastAPI endpoint ─────────────────────────────────────────────────────────
 
-        # Just test the static method without instantiating (avoids API key)
-        docs = [Document(page_content=f"Chunk {i} " + "x" * 1000) for i in range(20)]
-        context = RAGGenerator._build_context(docs)
-        assert len(context) <= 12100  # within limit + small buffer
+class TestHealthEndpoint:
+    def test_health_returns_ok(self):
+        from fastapi.testclient import TestClient
+        import api.main as main_module
 
-    def test_build_prompt_contains_query(self):
-        from rag.generator import RAGGenerator
-        prompt = RAGGenerator._build_prompt("What is AI?", "Context: AI is artificial intelligence.")
-        assert "What is AI?" in prompt
-        assert "Context" in prompt
+        # Inject mocks to bypass lifespan
+        mock_vector = MagicMock()
+        mock_vector._docs = ["doc1"]
+        mock_retriever = MagicMock()
+
+        main_module._vector_store = mock_vector
+        main_module._retriever = mock_retriever
+
+        client = TestClient(main_module.app, raise_server_exceptions=True)
+        resp = client.get("/health")
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
