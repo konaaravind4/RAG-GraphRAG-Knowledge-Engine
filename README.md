@@ -1,4 +1,4 @@
-# 🤖 Agentic RAG Knowledge Engine
+#  Agentic RAG Knowledge Engine
 
 A **production-level Agentic Retrieval-Augmented Generation** system built from scratch. Unlike traditional RAG pipelines that blindly retrieve-then-generate, this system uses an autonomous **ReAct agent loop** that plans, retrieves, evaluates, and self-corrects — producing grounded, hallucination-checked answers.
 
@@ -56,18 +56,18 @@ A **production-level Agentic Retrieval-Augmented Generation** system built from 
 
 ## Features
 
-- 🧠 **ReAct Agent Loop** — autonomous planning, retrieval, evaluation, and self-correction
-- 🔀 **Hybrid Retrieval** — FAISS vector + Neo4j graph + DuckDuckGo web, merged via Reciprocal Rank Fusion
-- 🎯 **Cross-Encoder Reranking** — precision boost on top-N candidates
-- ⚖️ **LLM-as-Judge Grading** — concurrent relevance scoring with filtering
-- 🔍 **Hallucination Detection** — self-reflective grounding verification
-- 🔧 **Query Decomposition** — multi-hop question breakdown
-- 📄 **Document Ingestion** — PDF, text, markdown, URL parsing with intelligent chunking
-- 💬 **Multi-Turn Conversations** — sliding window memory per conversation
-- 🌊 **Streaming Responses** — Server-Sent Events for real-time generation
-- 📊 **Observability** — structured JSON tracing of every agent step
-- 🐳 **Docker-Ready** — multi-stage build, non-root user, healthchecks
-- ✅ **CI/CD** — GitHub Actions: lint, type check, tests, Docker build
+-  **ReAct Agent Loop** — autonomous planning, retrieval, evaluation, and self-correction
+-  **Hybrid Retrieval** — FAISS vector + Neo4j graph + DuckDuckGo web, merged via Reciprocal Rank Fusion
+-  **Cross-Encoder Reranking** — precision boost on top-N candidates
+-  **LLM-as-Judge Grading** — concurrent relevance scoring with filtering
+-  **Hallucination Detection** — self-reflective grounding verification
+-  **Query Decomposition** — multi-hop question breakdown
+-  **Document Ingestion** — PDF, text, markdown, URL parsing with intelligent chunking
+-  **Multi-Turn Conversations** — sliding window memory per conversation
+-  **Streaming Responses** — Server-Sent Events for real-time generation
+-  **Observability** — structured JSON tracing of every agent step
+-  **Docker-Ready** — multi-stage build, non-root user, healthchecks
+-  **CI/CD** — GitHub Actions: lint, type check, tests, Docker build
 
 ## Quick Start
 
@@ -184,36 +184,36 @@ curl -N http://localhost:8000/chat/stream \
 ## Project Structure
 
 ```
-├── agent/                    # 🧠 Agent brain
+├── agent/                    #    Agent brain
 │   ├── orchestrator.py       #    ReAct control loop
 │   ├── router.py             #    Intent classification
 │   ├── decomposer.py         #    Multi-hop query decomposition
 │   ├── grader.py             #    Relevance grading + hallucination check
 │   ├── memory.py             #    Conversation memory
 │   └── schemas.py            #    Internal data models
-├── retrieval/                # 🔍 Multi-source retrieval
+├── retrieval/                #    Multi-source retrieval
 │   ├── vector_store.py       #    FAISS dense retriever
 │   ├── graph_store.py        #    Neo4j graph traversal
 │   ├── web_search.py         #    DuckDuckGo web search
 │   ├── hybrid.py             #    RRF multi-source fusion
 │   └── reranker.py           #    Cross-encoder reranker
-├── ingestion/                # 📄 Document processing
+├── ingestion/                #    Document processing
 │   ├── parser.py             #    PDF / text / URL parsing
 │   ├── chunker.py            #    Intelligent text chunking
 │   └── pipeline.py           #    End-to-end ingestion
-├── llm/                      # 🤖 LLM abstraction
+├── llm/                      #    LLM abstraction
 │   ├── client.py             #    OpenAI client with retry + streaming
 │   └── prompts.py            #    All system prompts (versioned)
-├── api/                      # 🌐 FastAPI application
+├── api/                      #    FastAPI application
 │   ├── main.py               #    Endpoints + lifespan
 │   ├── schemas.py            #    API models
 │   └── middleware.py         #    Request tracking
-├── config/                   # ⚙️ Configuration
+├── config/                   #    Configuration
 │   └── settings.py           #    Pydantic Settings
-├── observability/            # 📊 Monitoring
+├── observability/            #    Monitoring
 │   ├── tracer.py             #    Agent trace capture
 │   └── logger.py             #    Structured JSON logging
-├── tests/                    # ✅ Test suite
+├── tests/                    #    Test suite
 ├── Dockerfile                # Multi-stage, non-root
 ├── docker-compose.yml        # Full stack
 ├── Makefile                  # Dev commands
