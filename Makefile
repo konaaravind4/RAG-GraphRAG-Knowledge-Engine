@@ -1,6 +1,6 @@
 .PHONY: dev test lint typecheck docker clean install
 
-# ─── Development ──────────────────────────────────────────────────────────────
+#  Development
 
 install:
 	pip install -r requirements.txt
@@ -8,7 +8,7 @@ install:
 dev:
 	uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
 
-# ─── Quality ─────────────────────────────────────────────────────────────────
+#  Quality 
 
 test:
 	pytest -v --tb=short
@@ -27,7 +27,7 @@ format:
 typecheck:
 	mypy agent retrieval ingestion llm api config observability
 
-# ─── Docker ──────────────────────────────────────────────────────────────────
+# Docker
 
 docker:
 	docker build -t agentic-rag-engine .
@@ -38,7 +38,7 @@ docker-up:
 docker-down:
 	docker compose down
 
-# ─── Cleanup ─────────────────────────────────────────────────────────────────
+# Cleanup
 
 clean:
 	find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
