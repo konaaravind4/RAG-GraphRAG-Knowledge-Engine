@@ -1,7 +1,7 @@
 version: "3.9"
 
 services:
-  # ── RAG Engine ─────────────────────────────────────────────────────────────
+  # RAG Engine
   rag-engine:
     build: .
     ports:
@@ -19,7 +19,7 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  # ── Neo4j (optional — comment out if not needed) ──────────────────────────
+  #  Neo4j (optional — comment out if not needed)
   neo4j:
     image: neo4j:5-community
     ports:
