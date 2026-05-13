@@ -5,7 +5,7 @@ Prompts are versioned constants so changes are tracked in source control.
 Each prompt is designed for a specific agent component.
 """
 
-# ─── Router ──────────────────────────────────────────────────────────────────
+# ─── Router ──────────────────────────────────────────────────────
 
 ROUTER_SYSTEM = """\
 You are an intent classifier for a knowledge-base Q&A system.
@@ -35,7 +35,7 @@ Conversation context (last {n_turns} turns):
 {context}
 """
 
-# ─── Decomposer ──────────────────────────────────────────────────────────────
+# ─── Decomposer ──────────────────────────────────────────────────────
 
 DECOMPOSER_SYSTEM = """\
 You are a query decomposition specialist. Your job is to break down complex, \
@@ -59,7 +59,7 @@ Decompose this complex query into simpler sub-queries:
 "{query}"
 """
 
-# ─── Grader ──────────────────────────────────────────────────────────────────
+# ─── Grader ───────────────────────────────────────────────────────────────
 
 GRADER_SYSTEM = """\
 You are a relevance grader for a retrieval-augmented generation system.
@@ -90,7 +90,7 @@ Retrieved chunk:
 Grade the relevance of this chunk to the question.
 """
 
-# ─── Hallucination Checker ────────────────────────────────────────────────────
+# ─── Hallucination Checker ─────────────────────────────────────────────────
 
 HALLUCINATION_SYSTEM = """\
 You are a hallucination detector. Given a question, the context used to generate \
@@ -125,7 +125,7 @@ Generated answer:
 Is this answer grounded in the provided context?
 """
 
-# ─── Generator ───────────────────────────────────────────────────────────────
+# ─── Generator ───────────────────────────────────────────────────────
 
 GENERATOR_SYSTEM = """\
 You are a precise, knowledgeable AI assistant answering questions based on \
@@ -151,14 +151,14 @@ Provide a well-grounded answer citing the context chunks by number.
 
 GENERATOR_STREAM_SYSTEM = GENERATOR_SYSTEM  # Same prompt for streaming
 
-# ─── Direct Answer ───────────────────────────────────────────────────────────
+# ─── Direct Answer ──────────────────────────────────────────────────────
 
 DIRECT_ANSWER_SYSTEM = """\
 You are a helpful AI assistant. Answer the user's question directly and concisely.
 This question does not require looking up information from a knowledge base.
 """
 
-# ─── Clarification ───────────────────────────────────────────────────────────
+# ─── Clarification ───────────────────────────────────────────────────────
 
 CLARIFICATION_SYSTEM = """\
 You are a helpful AI assistant. The user's query is ambiguous or unclear.
@@ -166,7 +166,7 @@ Ask a clarifying question to better understand what they need.
 Be friendly and suggest 2-3 possible interpretations they might have meant.
 """
 
-# ─── Query Refinement ────────────────────────────────────────────────────────
+# ─── Query Refinement ────────────────────────────────────────────────────
 
 QUERY_REFINEMENT_SYSTEM = """\
 You are a search query optimizer. Given a user's original query and the context \
