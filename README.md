@@ -1,13 +1,26 @@
-#  Agentic RAG Knowledge Engine
+# Agentic RAG Knowledge Engine 🧠
+
+> **Production-level Agentic RAG with ReAct orchestration, hybrid retrieval (FAISS + Neo4j + Web), self-reflective grading, hallucination detection, streaming generation, and shared Ecosystem Gateway.**
+
+[![CI](https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine/actions/workflows/ci.yml/badge.svg)](https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10+-blue)](https://python.org)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.110+-teal)](https://fastapi.tiangolo.com)
+[![Stars](https://img.shields.io/github/stars/konaaravind4/RAG-GraphRAG-Knowledge-Engine?style=social)](https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine)
 
 A **production-level Agentic Retrieval-Augmented Generation** system built from scratch. Unlike traditional RAG pipelines that blindly retrieve-then-generate, this system uses an autonomous **ReAct agent loop** that plans, retrieves, evaluates, and self-corrects — producing grounded, hallucination-checked answers.
 
-## Architecture
+Now also serves as the **shared knowledge microservice** for the entire Kona AI Ecosystem.
+
+---
+
+## 🏗️ Architecture
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                       FastAPI Gateway                            │
 │  POST /chat · POST /chat/stream · POST /ingest · GET /health    │
+│  POST /ecosystem/search · GET /ecosystem/namespaces (NEW)        │
 └───────────────────────────┬──────────────────────────────────────┘
                             │
                  ┌──────────▼──────────┐
@@ -28,6 +41,12 @@ A **production-level Agentic Retrieval-Augmented Generation** system built from 
                  │  FAISS   │ │ Neo4j  │ │  Web     │
                  │  Vector  │ │ Graph  │ │  Search  │
                  └──────────┘ └────────┘ └──────────┘
+                       │
+                       ▼
+               ┌──────────────┐
+               │ KonaDB Vector│  ◄── Alternative FAISS backend (NEW)
+               │ (Persistent) │
+               └──────────────┘
 ```
 
 ### Agent Loop (ReAct Pattern)
@@ -43,200 +62,176 @@ A **production-level Agentic Retrieval-Augmented Generation** system built from 
 8. RESPOND  → Return answer + sources + full execution trace
 ```
 
-## What Makes It "Agentic"
+---
+
+## ✨ What Makes It "Agentic"
 
 | Feature | Traditional RAG | This System |
 |---------|----------------|-------------|
 | Query handling | Single retrieval pass | Intent routing → adaptive strategy |
 | Complex queries | Fails silently | Decomposes into sub-queries |
-| Bad retrieval | Returns low-quality answer | Self-corrects: refines query, retries, adds web search |
+| Bad retrieval | Returns low-quality answer | Self-corrects: refines, retries, adds web search |
 | Hallucination | Undetected | LLM-as-judge verification + regeneration |
-| Observability | Black box | Full trace of every decision step |
-| Conversation | Stateless | Multi-turn memory with sliding window |
+| Observability | Black box | Full trace of every decision |
+| **Ecosystem** | Isolated | **Shared gateway for all projects (NEW)** |
+| **Storage** | FAISS only | **FAISS + Neo4j + KonaDB (NEW)** |
 
-## Features
+---
 
--  **ReAct Agent Loop** — autonomous planning, retrieval, evaluation, and self-correction
--  **Hybrid Retrieval** — FAISS vector + Neo4j graph + DuckDuckGo web, merged via Reciprocal Rank Fusion
--  **Cross-Encoder Reranking** — precision boost on top-N candidates
--  **LLM-as-Judge Grading** — concurrent relevance scoring with filtering
--  **Hallucination Detection** — self-reflective grounding verification
--  **Query Decomposition** — multi-hop question breakdown
--  **Document Ingestion** — PDF, text, markdown, URL parsing with intelligent chunking
--  **Multi-Turn Conversations** — sliding window memory per conversation
--  **Streaming Responses** — Server-Sent Events for real-time generation
--  **Observability** — structured JSON tracing of every agent step
--  **Docker-Ready** — multi-stage build, non-root user, healthchecks
--  **CI/CD** — GitHub Actions: lint, type check, tests, Docker build
+## 🚀 Quick Start
 
-## Quick Start
-
-### Local Development
+### 1. Install
 
 ```bash
 git clone https://github.com/konaaravind4/RAG-GraphRAG-Knowledge-Engine
 cd RAG-GraphRAG-Knowledge-Engine
-
-# Setup
-cp .env.example .env
-# Edit .env with your OPENAI_API_KEY
-
-# Install
 pip install -r requirements.txt
-
-# Run
-make dev
-# Server starts at http://localhost:8000
 ```
 
-### Docker
+### 2. Configure
 
 ```bash
-# App only
-docker build -t agentic-rag .
-docker run -p 8000:8000 -e OPENAI_API_KEY=sk-... agentic-rag
-
-# Full stack (app + Neo4j)
-docker compose up -d
+cp .env.example .env
+# Fill in: OPENAI_API_KEY, NEO4J_URI, NEO4J_PASSWORD
 ```
 
-## API Usage
-
-### 1. Ingest Documents
+### 3. Ingest Documents
 
 ```bash
-# Upload a PDF
-curl -X POST http://localhost:8000/ingest/file \
-  -F "file=@report.pdf"
-
-# Ingest from URL
-curl -X POST http://localhost:8000/ingest/url \
+# Ingest a PDF or text file
+curl -X POST http://localhost:8000/ingest \
   -H "Content-Type: application/json" \
-  -d '{"url": "https://en.wikipedia.org/wiki/Retrieval-augmented_generation"}'
-
-# Ingest raw text
-curl -X POST http://localhost:8000/ingest/text \
-  -H "Content-Type: application/json" \
-  -d '{"documents": ["Paris is the capital of France.", "Berlin is the capital of Germany."]}'
+  -d '{"source": "docs/kronos_paper.pdf", "namespace": "financial"}'
 ```
 
-### 2. Ask Questions
+### 4. Chat
 
 ```bash
-# Standard chat (full agent pipeline)
+# Single query
 curl -X POST http://localhost:8000/chat \
   -H "Content-Type: application/json" \
-  -d '{"query": "What is the capital of France?", "conversation_id": "session1"}'
+  -d '{"query": "What is Binary Spherical Quantization in Kronos?"}'
+
+# Streaming response
+curl -X POST http://localhost:8000/chat/stream \
+  -d '{"query": "Explain the ReAct loop", "stream": true}'
 ```
 
-**Response:**
-```json
+### 5. Start API
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+---
+
+## 📡 API Reference
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/chat` | Agentic RAG query (blocking) |
+| `POST` | `/chat/stream` | Streaming RAG response |
+| `POST` | `/ingest` | Add documents to knowledge base |
+| `GET`  | `/health` | Health check + component status |
+| `POST` | `/ecosystem/search` | Search by namespace (for ecosystem projects) |
+| `GET`  | `/ecosystem/namespaces` | List available namespaces |
+
+```bash
+# Ecosystem search (used by Code Review Bot, Kronos, etc.)
+curl -X POST http://localhost:8000/ecosystem/search \
+  -d '{"query": "SQL injection prevention", "namespace": "code_review", "top_k": 3}'
+
+# Response
 {
-  "answer": "Paris is the capital of France [1].",
-  "query": "What is the capital of France?",
-  "conversation_id": "session1",
-  "sources": [
+  "results": [
     {
-      "text": "Paris is the capital of France.",
-      "score": 0.9512,
-      "source": "manual_0",
-      "retrieval_method": "vector"
+      "text": "SQL injection occurs when user input is interpolated directly...",
+      "source": "owasp_top10",
+      "score": 0.94,
+      "namespace": "code_review"
     }
-  ],
-  "route_decision": "retrieval",
-  "iterations": 1,
-  "trace": {
-    "trace_id": "a1b2c3d4e5f6",
-    "steps": [
-      {"step_type": "route", "duration_ms": 234.5},
-      {"step_type": "retrieve", "duration_ms": 45.2},
-      {"step_type": "grade", "duration_ms": 312.1},
-      {"step_type": "generate", "duration_ms": 567.3},
-      {"step_type": "reflect", "duration_ms": 289.8}
-    ]
-  }
+  ]
 }
 ```
 
-### 3. Streaming
+---
+
+## 🗃️ KonaDB Vector Backend (New!)
+
+Use [KonaDB](https://github.com/konaaravind4/kona-db) as a fully persistent vector store instead of FAISS:
+
+```python
+# In config/.env
+VECTOR_BACKEND=kona          # Options: faiss (default), kona
+KONA_DB_PATH=knowledge.kona
+```
+
+```python
+# Programmatically
+from kona.vector import VectorStore
+import kona
+
+conn = kona.connect("knowledge.kona")
+vs = VectorStore(conn, namespace="financial")
+
+# Embeddings persist across restarts — no need to re-index!
+vs.add(embedding=my_embedding, text="Kronos uses BSQ tokenization", metadata={"source": "paper"})
+```
+
+---
+
+## 🌍 Ecosystem Gateway (New!)
+
+This system is the **knowledge backbone** of the Kona AI Ecosystem:
+
+```
+Agentic-Code-Review-Bot ──► /ecosystem/search?namespace=code_review
+Kronos Reproduction      ──► /ecosystem/search?namespace=financial
+AI-SQL-Data-Analyst      ──► /ecosystem/search?namespace=sql
+Sentiment Dashboard      ──► /ecosystem/search?namespace=sentiment
+```
+
+Run as a standalone knowledge microservice:
 
 ```bash
-curl -N http://localhost:8000/chat/stream \
-  -H "Content-Type: application/json" \
-  -d '{"query": "Explain RAG in detail"}'
+python -m ecosystem.gateway --port 9000
 ```
 
-## Configuration
+Pre-loaded namespaces:
+- **financial** — Kronos, OHLCVA, quant finance, backtesting
+- **code_review** — OWASP, PEP8, ESLint, clean code patterns
+- **sql** — Query optimization, indexing, schema design
+- **sentiment** — RoBERTa, emotion analysis, Kafka streaming
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OPENAI_API_KEY` | — | **Required.** OpenAI API key |
-| `LLM_MODEL` | `gpt-4o-mini` | Primary generation model |
-| `LLM_FAST_MODEL` | `gpt-4o-mini` | Cheap model for routing/grading |
-| `EMBED_MODEL` | `BAAI/bge-base-en-v1.5` | Embedding model |
-| `RERANKER_MODEL` | `cross-encoder/ms-marco-MiniLM-L-6-v2` | Reranker model |
-| `NEO4J_URL` | — | Neo4j bolt URL (optional) |
-| `CHUNK_SIZE` | `512` | Chunk size in tokens |
-| `CHUNK_OVERLAP` | `64` | Overlap tokens between chunks |
-| `MAX_AGENT_ITERATIONS` | `3` | Max retrieval retry loops |
-| `ENABLE_TRACING` | `true` | Include execution trace in responses |
+---
 
-## Project Structure
-
-```
-├── agent/                    #    Agent brain
-│   ├── orchestrator.py       #    ReAct control loop
-│   ├── router.py             #    Intent classification
-│   ├── decomposer.py         #    Multi-hop query decomposition
-│   ├── grader.py             #    Relevance grading + hallucination check
-│   ├── memory.py             #    Conversation memory
-│   └── schemas.py            #    Internal data models
-├── retrieval/                #    Multi-source retrieval
-│   ├── vector_store.py       #    FAISS dense retriever
-│   ├── graph_store.py        #    Neo4j graph traversal
-│   ├── web_search.py         #    DuckDuckGo web search
-│   ├── hybrid.py             #    RRF multi-source fusion
-│   └── reranker.py           #    Cross-encoder reranker
-├── ingestion/                #    Document processing
-│   ├── parser.py             #    PDF / text / URL parsing
-│   ├── chunker.py            #    Intelligent text chunking
-│   └── pipeline.py           #    End-to-end ingestion
-├── llm/                      #    LLM abstraction
-│   ├── client.py             #    OpenAI client with retry + streaming
-│   └── prompts.py            #    All system prompts (versioned)
-├── api/                      #    FastAPI application
-│   ├── main.py               #    Endpoints + lifespan
-│   ├── schemas.py            #    API models
-│   └── middleware.py         #    Request tracking
-├── config/                   #    Configuration
-│   └── settings.py           #    Pydantic Settings
-├── observability/            #    Monitoring
-│   ├── tracer.py             #    Agent trace capture
-│   └── logger.py             #    Structured JSON logging
-├── tests/                    #    Test suite
-├── Dockerfile                # Multi-stage, non-root
-├── docker-compose.yml        # Full stack
-├── Makefile                  # Dev commands
-└── .github/workflows/ci.yml  # CI pipeline
-```
-
-## Development
+## 🐳 Docker
 
 ```bash
-make install        # Install dependencies
-make dev            # Run dev server with hot-reload
-make test           # Run all tests
-make test-fast      # Skip slow/integration tests
-make lint           # Lint with ruff
-make format         # Auto-format code
-make docker         # Build Docker image
-make docker-up      # Start full stack
+docker-compose up
 ```
 
-## Tech Stack
+```yaml
+# docker-compose.yml includes:
+# - API server (port 8000)
+# - Neo4j graph database (port 7687)
+# - Ecosystem Gateway (port 9000)
+```
 
-`Python 3.11` · `FastAPI` · `OpenAI` · `FAISS` · `sentence-transformers` · `Neo4j` · `Pydantic` · `structlog` · `Docker` · `GitHub Actions`
+---
 
-## License
+## 🤝 Related Projects
 
-MIT
+| Project | How It Uses This |
+|---------|-----------------|
+| [kona-db](https://github.com/konaaravind4/kona-db) | Alternative FAISS backend for vector storage |
+| [Agentic-Code-Review-Bot](https://github.com/konaaravind4/Agentic-Code-Review-Bot) | Fetches code review best practices |
+| [kronos-reproduction](https://github.com/konaaravind4/kronos-reproduction) | Financial knowledge retrieval |
+| [AI-SQL-Data-Analyst](https://github.com/konaaravind4/AI-SQL-Data-Analyst) | SQL optimization knowledge |
+| [Real-time-Sentiment-Intelligence-Dashboard](https://github.com/konaaravind4/Real-time-Sentiment-Intelligence-Dashboard) | Contextualizes emotions with events |
+
+---
+
+## 📄 License
+
+MIT © [konaaravind4](https://github.com/konaaravind4)
