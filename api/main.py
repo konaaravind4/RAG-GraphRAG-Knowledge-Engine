@@ -9,6 +9,9 @@ Endpoints:
     POST /ingest/text      — ingest raw text
     GET  /documents        — list indexed documents
     GET  /health           — health check with component status
+    POST /ecosystem/search — search ecosystem knowledge namespaces
+    GET  /ecosystem/namespaces — list available namespaces
+    GET  /stats            — orchestrator runtime statistics
 """
 
 from __future__ import annotations
@@ -22,6 +25,7 @@ from fastapi.responses import StreamingResponse
 
 from agent.memory import ConversationMemory
 from agent.orchestrator import AgentOrchestrator
+from agent.schemas import EcosystemSearchRequest, EcosystemSearchResponse
 from api.middleware import RequestTrackingMiddleware
 from api.schemas import (
     ChatRequest,
@@ -35,6 +39,7 @@ from api.schemas import (
     SourceChunk,
 )
 from config.settings import get_settings
+from ecosystem.gateway import EcosystemRAGClient, KNOWLEDGE_BASES
 from ingestion.pipeline import IngestionPipeline
 from llm.client import LLMClient
 from retrieval.graph_store import GraphStore
@@ -52,6 +57,8 @@ _orchestrator: AgentOrchestrator | None = None
 _pipeline: IngestionPipeline | None = None
 _vector_store: VectorStore | None = None
 _settings = None
+# Shared ecosystem RAG client (uses local fallback when gateway is down)
+_ecosystem_client: EcosystemRAGClient = EcosystemRAGClient()
 
 
 @asynccontextmanager
@@ -291,3 +298,98 @@ async def list_documents():
         total_chunks=_vector_store.document_count,
         sources=sources,
     )
+
+
+# ─── Ecosystem Endpoints ────────────────────────────────────────────────────
+
+
+@app.post(
+    "/ecosystem/search",
+    response_model=EcosystemSearchResponse,
+    tags=["Ecosystem"],
+    summary="Search a knowledge namespace",
+)
+async def ecosystem_search(req: EcosystemSearchRequest) -> EcosystemSearchResponse:
+    """Search the ecosystem knowledge base for a given namespace.
+
+    Uses the :class:`~ecosystem.gateway.EcosystemRAGClient` with a local
+    keyword-match fallback so the endpoint works even when the external
+    gateway is unavailable.
+
+    Args:
+        req: Request body with *query*, *namespace*, and *top_k* fields.
+
+    Returns:
+        :class:`~agent.schemas.EcosystemSearchResponse` with matched chunks.
+    """
+    if req.namespace not in KNOWLEDGE_BASES:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Namespace '{req.namespace}' not found. "
+                   f"Available: {list(KNOWLEDGE_BASES.keys())}",
+        )
+
+    logger.info(
+        "Ecosystem search",
+        namespace=req.namespace,
+        query=req.query[:80],
+        top_k=req.top_k,
+    )
+
+    results = _ecosystem_client._local_search(
+        query=req.query,
+        namespace=req.namespace,
+        top_k=req.top_k,
+    )
+
+    serialised = [
+        {"text": r.text, "source": r.source, "score": r.score, "namespace": r.namespace}
+        for r in results
+    ]
+    return EcosystemSearchResponse(
+        results=serialised,
+        namespace=req.namespace,
+        count=len(serialised),
+    )
+
+
+@app.get(
+    "/ecosystem/namespaces",
+    tags=["Ecosystem"],
+    summary="List available knowledge namespaces",
+)
+async def ecosystem_namespaces() -> dict:
+    """Return all available knowledge namespaces in the ecosystem.
+
+    Returns:
+        JSON object ``{"namespaces": [...]}``.  The list is derived directly
+        from the in-process ``KNOWLEDGE_BASES`` dict so it is always accurate.
+    """
+    namespaces = _ecosystem_client.available_namespaces()
+    logger.debug("Listing ecosystem namespaces", count=len(namespaces))
+    return {"namespaces": namespaces}
+
+
+# ─── Observability Endpoints ──────────────────────────────────────────────────
+
+
+@app.get(
+    "/stats",
+    tags=["System"],
+    summary="Orchestrator runtime statistics",
+)
+async def stats() -> dict:
+    """Return live orchestrator telemetry.
+
+    Exposes the counters maintained by :attr:`AgentOrchestrator.stats`:
+
+    - **request_count** — total ``/chat`` requests handled since startup.
+    - **total_tokens**  — cumulative LLM tokens consumed.
+    - **avg_tokens_per_request** — mean tokens per request.
+
+    Returns:
+        503 if the orchestrator has not been initialized yet.
+    """
+    if not _orchestrator:
+        raise HTTPException(status_code=503, detail="Engine not initialized")
+    return _orchestrator.stats

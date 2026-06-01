@@ -89,10 +89,48 @@ class AgentOrchestrator:
 
         self._max_iterations = self._settings.max_agent_iterations
 
+        # ── Telemetry counters ────────────────────────────────────────────────
+        self._request_count: int = 0
+        self._total_tokens: int = 0
+        self._default_namespace: str = "default"
+
+    @property
+    def stats(self) -> dict:
+        """Return runtime telemetry statistics.
+
+        Returns:
+            dict with keys:
+                request_count         — total calls to run().
+                total_tokens          — cumulative tokens across all LLM calls.
+                avg_tokens_per_request — mean tokens per completed request.
+        """
+        avg = (
+            round(self._total_tokens / self._request_count, 2)
+            if self._request_count > 0 else 0.0
+        )
+        return {
+            "request_count": self._request_count,
+            "total_tokens": self._total_tokens,
+            "avg_tokens_per_request": avg,
+        }
+
+    def set_namespace(self, namespace: str) -> None:
+        """Set the default retrieval namespace for subsequent run() calls.
+
+        The namespace is propagated to AgentResponse.namespace so callers
+        can track which knowledge partition produced the answer.
+
+        Args:
+            namespace: Namespace string (e.g. 'financial', 'code_review').
+        """
+        self._default_namespace = namespace
+        logger.info("Orchestrator namespace updated", namespace=namespace)
+
     async def run(
         self,
         query: str,
         conversation_id: str = "default",
+        namespace: str = "default",
     ) -> AgentResponse:
         """
         Execute the full agentic RAG pipeline.
@@ -100,10 +138,15 @@ class AgentOrchestrator:
         Args:
             query: User's question.
             conversation_id: ID for multi-turn context.
+            namespace: Knowledge namespace for this request (overrides set_namespace).
+                       Stored on the returned AgentResponse for traceability.
 
         Returns:
-            AgentResponse with answer, sources, and trace.
+            AgentResponse with answer, sources, trace, token usage, and namespace.
         """
+        self._request_count += 1
+        effective_namespace = namespace if namespace != "default" else self._default_namespace
+        _tokens_before = self._llm.usage.total_tokens if hasattr(self._llm.usage, "total_tokens") else 0
         trace = TraceContext(query=query, conversation_id=conversation_id)
 
         try:
@@ -255,6 +298,13 @@ class AgentOrchestrator:
             # ── Step 8: RESPOND ──────────────────────────────────────────
             await self._memory.add_turn(conversation_id, "assistant", answer)
 
+            # Tally token usage
+            _tokens_after = self._llm.usage.total_tokens if hasattr(self._llm.usage, "total_tokens") else 0
+            _request_tokens = max(0, _tokens_after - _tokens_before)
+            self._total_tokens += _request_tokens
+            # Cost estimate: ~$0.002 per 1K tokens (rough GPT-3.5 / equivalent)
+            _cost = round(_request_tokens * 0.000002, 6)
+
             return AgentResponse(
                 answer=answer,
                 query=query,
@@ -263,6 +313,9 @@ class AgentOrchestrator:
                 route_decision=route.decision.value,
                 iterations=iteration + 1,
                 trace=trace.to_dict() if self._settings.enable_tracing else None,
+                tokens_used=_request_tokens,
+                cost_estimate_usd=_cost,
+                namespace=effective_namespace,
             )
 
         except Exception as exc:

@@ -69,13 +69,23 @@ class VectorStore:
         store.load("./data/index")
     """
 
-    def __init__(self, model_name: str = "BAAI/bge-base-en-v1.5"):
+    def __init__(self, model_name: str = "BAAI/bge-base-en-v1.5", namespace: str = "default"):
         self._model_name = model_name
+        self._namespace = namespace
         self._embedder = None
         self._index = None
         self._documents: list[str] = []
         self._metadatas: list[ChunkMetadata] = []
         self._dimension: int = 0
+
+    @property
+    def namespace(self) -> str:
+        """Return the namespace this store is associated with.
+
+        The namespace is used to logically partition knowledge (e.g. 'financial',
+        'code_review') without requiring separate FAISS index files.
+        """
+        return self._namespace
 
     @property
     def document_count(self) -> int:
@@ -84,6 +94,14 @@ class VectorStore:
     @property
     def is_built(self) -> bool:
         return self._index is not None and len(self._documents) > 0
+
+    def count(self) -> int:
+        """Return the number of chunks currently stored in the index.
+
+        Convenience alias for :attr:`document_count` that reads naturally in
+        procedural contexts (e.g. ``store.count() == 0``).
+        """
+        return len(self._documents)
 
     def _get_embedder(self):
         """Lazy-load the embedding model."""
@@ -255,3 +273,60 @@ class VectorStore:
         self._metadatas.clear()
         self._dimension = 0
         logger.info("Cleared vector store")
+
+    def clear_namespace(self, namespace: str) -> int:
+        """Remove all chunks whose source begins with *namespace*.
+
+        This enables soft multi-tenancy: each ingested document is tagged with
+        a source like ``'financial/doc_0'``.  Calling
+        ``clear_namespace('financial')`` removes only those chunks while leaving
+        other namespaces intact.
+
+        The FAISS index is rebuilt from the remaining documents after removal.
+
+        Args:
+            namespace: Source-prefix to match (case-sensitive, e.g. 'financial').
+
+        Returns:
+            Number of chunks removed.
+
+        Raises:
+            RuntimeError: If FAISS is not installed.
+        """
+        import faiss
+
+        prefix = namespace.rstrip("/") + "/"
+        keep_texts: list[str] = []
+        keep_metas: list[ChunkMetadata] = []
+
+        for text, meta in zip(self._documents, self._metadatas):
+            if not meta.source.startswith(prefix) and meta.source != namespace:
+                keep_texts.append(text)
+                keep_metas.append(meta)
+
+        removed = len(self._documents) - len(keep_texts)
+
+        if removed == 0:
+            logger.info("clear_namespace: no chunks matched", namespace=namespace)
+            return 0
+
+        # Rebuild index from remaining chunks
+        self._documents = keep_texts
+        self._metadatas = keep_metas
+
+        if keep_texts:
+            vectors = self._embed(keep_texts)
+            self._dimension = vectors.shape[1]
+            self._index = faiss.IndexFlatIP(self._dimension)
+            self._index.add(vectors)
+        else:
+            self._index = None
+            self._dimension = 0
+
+        logger.info(
+            "clear_namespace complete",
+            namespace=namespace,
+            removed=removed,
+            remaining=len(self._documents),
+        )
+        return removed
