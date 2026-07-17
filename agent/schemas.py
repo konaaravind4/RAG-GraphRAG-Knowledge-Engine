@@ -17,7 +17,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
-# ─── Route Decision ──────────────────────────────────────────────────────────
+
 
 class RouteType(str, Enum):
     DIRECT = "direct"
@@ -33,7 +33,7 @@ class RouteDecision(BaseModel):
     confidence: float = Field(default=0.8, ge=0.0, le=1.0)
 
 
-# ─── Query Decomposition ────────────────────────────────────────────────────
+
 
 class DecomposedQuery(BaseModel):
     """Output of the query decomposer."""
@@ -41,7 +41,7 @@ class DecomposedQuery(BaseModel):
     reasoning: str = ""
 
 
-# ─── Grading ─────────────────────────────────────────────────────────────────
+
 
 class RelevanceGrade(BaseModel):
     """Relevance score for a single chunk."""
@@ -63,7 +63,7 @@ class CompletenessCheck(BaseModel):
     missing_aspects: list[str] = Field(default_factory=list)
 
 
-# ─── Query Refinement ───────────────────────────────────────────────────────
+
 
 class RefinedQuery(BaseModel):
     """Output of query refinement."""
@@ -71,7 +71,7 @@ class RefinedQuery(BaseModel):
     reasoning: str = ""
 
 
-# ─── Agent State ─────────────────────────────────────────────────────────────
+
 
 class AgentState(str, Enum):
     """States in the agent's ReAct loop."""
@@ -85,7 +85,7 @@ class AgentState(str, Enum):
     ERROR = "error"
 
 
-# ─── Conversation ────────────────────────────────────────────────────────────
+
 
 class ConversationTurn(BaseModel):
     """A single turn in the conversation."""
@@ -93,7 +93,7 @@ class ConversationTurn(BaseModel):
     content: str
 
 
-# ─── Agent Response ──────────────────────────────────────────────────────────
+
 
 class AgentResponse(BaseModel):
     """Final response from the agent orchestrator.
@@ -124,7 +124,7 @@ class AgentResponse(BaseModel):
     model_config = {"arbitrary_types_allowed": True}
 
 
-# ─── Ecosystem Search ─────────────────────────────────────────────────────────
+
 
 class EcosystemSearchRequest(BaseModel):
     """Request payload for the /ecosystem/search endpoint.
