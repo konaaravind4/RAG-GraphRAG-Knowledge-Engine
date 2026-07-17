@@ -29,8 +29,8 @@ class RetrievalConfig:
     graph_weight: float = 0.7
     web_weight: float = 0.5
     use_reranker: bool = True
-    use_web_search: bool = False  # Only enabled by the agent when local results are insufficient
-    rrf_k: int = 60  # RRF constant (standard value)
+    use_web_search: bool = False  
+    rrf_k: int = 60  
 
 
 class HybridRetriever:
@@ -70,29 +70,29 @@ class HybridRetriever:
             Merged, deduplicated, and ranked list of chunks.
         """
         config = config or RetrievalConfig()
-        fetch_k = config.top_k * 3  # Over-fetch for reranking
+        fetch_k = config.top_k * 3 
 
-        # ── Gather results from all sources concurrently ─────────────────────
+     
         tasks = []
 
-        # Vector search (always)
+      
         if self._vector.is_built:
             tasks.append(("vector", self._vector.async_search(query, k=fetch_k)))
         else:
             tasks.append(("vector", asyncio.coroutine(lambda: [])()))
 
-        # Graph search (if available)
+      
         if self._graph and self._graph.is_available:
             loop = asyncio.get_event_loop()
             tasks.append(("graph", loop.run_in_executor(
                 None, self._graph.search, query, fetch_k
             )))
 
-        # Web search (if enabled)
+   
         if config.use_web_search and self._web:
             tasks.append(("web", self._web.async_search(query, k=config.top_k)))
 
-        # Execute all tasks concurrently
+    
         source_results: dict[str, list[RetrievedChunk]] = {}
         task_names = [t[0] for t in tasks]
         task_coros = [t[1] for t in tasks]
@@ -106,7 +106,7 @@ class HybridRetriever:
             else:
                 source_results[name] = result
 
-        # ── Merge with RRF ──────────────────────────────────────────────────
+     
         weight_map = {
             "vector": config.vector_weight,
             "graph": config.graph_weight,
@@ -115,7 +115,7 @@ class HybridRetriever:
 
         merged = self._rrf_merge(source_results, weight_map, config.rrf_k)
 
-        # ── Rerank top candidates ────────────────────────────────────────────
+    
         if config.use_reranker and self._reranker and len(merged) > 0:
             merged = await self._reranker.async_rerank(
                 query, merged, top_k=config.top_k
@@ -142,7 +142,7 @@ class HybridRetriever:
         RRF avoids the problem of incompatible score distributions
         across different retrieval methods by using only rank positions.
         """
-        # Score accumulator keyed by chunk text (for dedup)
+      
         scores: dict[str, float] = defaultdict(float)
         chunk_map: dict[str, RetrievedChunk] = {}
         sources_map: dict[str, set[str]] = defaultdict(set)
@@ -150,20 +150,20 @@ class HybridRetriever:
         for source_name, chunks in source_results.items():
             weight = weights.get(source_name, 1.0)
             for rank, chunk in enumerate(chunks):
-                key = chunk.text.strip()[:200]  # Use first 200 chars as dedup key
+                key = chunk.text.strip()[:200]  
                 scores[key] += weight / (rrf_k + rank + 1)
                 sources_map[key].add(source_name)
 
                 if key not in chunk_map:
                     chunk_map[key] = chunk
 
-        # Build final list
+      
         merged = []
         for key in sorted(scores.keys(), key=lambda k: scores[k], reverse=True):
             chunk = chunk_map[key]
             chunk.score = scores[key]
 
-            # Mark as hybrid if from multiple sources
+         
             sources = sources_map[key]
             if len(sources) > 1:
                 chunk.retrieval_method = "hybrid"
