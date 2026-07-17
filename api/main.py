@@ -51,7 +51,7 @@ from observability.logger import get_logger, setup_logging
 
 logger = get_logger(__name__)
 
-# ─── Global State ────────────────────────────────────────────────────────────
+
 
 _orchestrator: AgentOrchestrator | None = None
 _pipeline: IngestionPipeline | None = None
@@ -71,27 +71,27 @@ async def lifespan(app: FastAPI):
 
     logger.info("Initializing Agentic RAG Engine …")
 
-    # ── Vector Store ─────────────────────────────────────────────────────
+
     _vector_store = VectorStore(model_name=_settings.embed_model)
 
     # Try to load persisted index
     if _vector_store.load(_settings.index_persist_dir):
         logger.info("Loaded persisted index", documents=_vector_store.document_count)
 
-    # ── Graph Store (optional) ──────────────────────────────────────────
+
     graph_store = GraphStore(
         url=_settings.neo4j_url,
         username=_settings.neo4j_user,
         password=_settings.neo4j_password,
     )
 
-    # ── Web Searcher ────────────────────────────────────────────────────
+   
     web_searcher = WebSearcher(max_results=5)
 
-    # ── Reranker ────────────────────────────────────────────────────────
+
     reranker = Reranker(model_name=_settings.reranker_model)
 
-    # ── Hybrid Retriever ────────────────────────────────────────────────
+   
     retriever = HybridRetriever(
         vector_store=_vector_store,
         graph_store=graph_store if graph_store.is_available else None,
@@ -99,13 +99,13 @@ async def lifespan(app: FastAPI):
         reranker=reranker,
     )
 
-    # ── LLM Client ─────────────────────────────────────────────────────
+
     llm = LLMClient(settings=_settings)
 
-    # ── Memory ─────────────────────────────────────────────────────────
+    
     memory = ConversationMemory(max_turns=_settings.max_conversation_turns)
 
-    # ── Orchestrator ───────────────────────────────────────────────────
+    
     _orchestrator = AgentOrchestrator(
         llm=llm,
         retriever=retriever,
@@ -113,7 +113,7 @@ async def lifespan(app: FastAPI):
         settings=_settings,
     )
 
-    # ── Ingestion Pipeline ─────────────────────────────────────────────
+    
     _pipeline = IngestionPipeline(
         vector_store=_vector_store,
         settings=_settings,
@@ -136,7 +136,7 @@ async def lifespan(app: FastAPI):
         graph_store.close()
 
 
-# ─── App ─────────────────────────────────────────────────────────────────────
+
 
 app = FastAPI(
     title="Agentic RAG Knowledge Engine",
@@ -162,7 +162,7 @@ app.add_middleware(
 )
 
 
-# ─── Endpoints ───────────────────────────────────────────────────────────────
+
 
 
 @app.get("/health", response_model=HealthResponse, tags=["System"])
@@ -300,7 +300,6 @@ async def list_documents():
     )
 
 
-# ─── Ecosystem Endpoints ────────────────────────────────────────────────────
 
 
 @app.post(
@@ -370,7 +369,7 @@ async def ecosystem_namespaces() -> dict:
     return {"namespaces": namespaces}
 
 
-# ─── Observability Endpoints ──────────────────────────────────────────────────
+
 
 
 @app.get(
