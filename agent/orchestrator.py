@@ -89,7 +89,7 @@ class AgentOrchestrator:
 
         self._max_iterations = self._settings.max_agent_iterations
 
-        # ── Telemetry counters ────────────────────────────────────────────────
+
         self._request_count: int = 0
         self._total_tokens: int = 0
         self._default_namespace: str = "default"
@@ -154,7 +154,7 @@ class AgentOrchestrator:
             await self._memory.add_turn(conversation_id, "user", query)
             context = await self._memory.get_context(conversation_id, last_n=5)
 
-            # ── Step 1: ROUTE ────────────────────────────────────────────
+         
             with trace.step(TraceStepType.ROUTE) as step:
                 route = await self._router.route(query, context)
                 step.output_data = {
@@ -163,14 +163,14 @@ class AgentOrchestrator:
                 }
                 step.token_usage = self._llm.usage.to_dict()
 
-            # ── Handle non-retrieval routes ──────────────────────────────
+        
             if route.decision == RouteType.DIRECT:
                 return await self._handle_direct(query, conversation_id, trace)
 
             if route.decision == RouteType.CLARIFICATION:
                 return await self._handle_clarification(query, conversation_id, trace)
 
-            # ── Step 2: PLAN (if multi-hop) ─────────────────────────────
+          
             queries_to_retrieve = [query]
             if route.decision == RouteType.MULTI_HOP:
                 with trace.step(TraceStepType.DECOMPOSE) as step:
@@ -181,7 +181,7 @@ class AgentOrchestrator:
                         "reasoning": decomposed.reasoning,
                     }
 
-            # ── Agentic Loop: RETRIEVE → GRADE → DECIDE ────────────────
+     
             all_relevant_chunks: list[RetrievedChunk] = []
             iteration = 0
 
@@ -233,7 +233,7 @@ class AgentOrchestrator:
                     )
                     queries_to_retrieve = [await self._refine_query(query, context)]
 
-            # ── Step 6: GENERATE ─────────────────────────────────────────
+   
             if not all_relevant_chunks:
                 answer = (
                     "I couldn't find sufficient relevant information in the knowledge base "
@@ -264,7 +264,7 @@ class AgentOrchestrator:
                 step.output_data = {"answer_length": len(answer)}
                 step.token_usage = self._llm.usage.to_dict()
 
-            # ── Step 7: REFLECT (hallucination check) ────────────────────
+       
             with trace.step(TraceStepType.REFLECT) as step:
                 hallucination = await self._grader.check_hallucination(
                     query=query,
@@ -282,7 +282,7 @@ class AgentOrchestrator:
                         "Hallucination detected, regenerating",
                         issues=hallucination.issues,
                     )
-                    # Regenerate with stricter prompt
+        
                     stricter_prompt = (
                         f"{prompt}\n\n"
                         "IMPORTANT: Only state facts directly supported by the context above. "
@@ -295,14 +295,14 @@ class AgentOrchestrator:
                         max_tokens=1024,
                     )
 
-            # ── Step 8: RESPOND ──────────────────────────────────────────
+    
             await self._memory.add_turn(conversation_id, "assistant", answer)
 
-            # Tally token usage
+          
             _tokens_after = self._llm.usage.total_tokens if hasattr(self._llm.usage, "total_tokens") else 0
             _request_tokens = max(0, _tokens_after - _tokens_before)
             self._total_tokens += _request_tokens
-            # Cost estimate: ~$0.002 per 1K tokens (rough GPT-3.5 / equivalent)
+        
             _cost = round(_request_tokens * 0.000002, 6)
 
             return AgentResponse(
@@ -381,7 +381,7 @@ class AgentOrchestrator:
 
         await self._memory.add_turn(conversation_id, "assistant", full_answer)
 
-    # ── Private Helpers ──────────────────────────────────────────────────────
+
 
     async def _handle_direct(
         self, query: str, conversation_id: str, trace: TraceContext
