@@ -11,7 +11,7 @@ from typing import Any, Optional
 from pydantic import BaseModel, Field
 
 
-# ─── Chat ────────────────────────────────────────────────────────────────────
+
 
 class ChatRequest(BaseModel):
     """Request body for the /chat endpoint."""
@@ -45,7 +45,7 @@ class ChatResponse(BaseModel):
     trace: Optional[dict[str, Any]] = None
 
 
-# ─── Ingestion ───────────────────────────────────────────────────────────────
+
 
 class IngestURLRequest(BaseModel):
     """Request body for /ingest/url."""
@@ -69,7 +69,7 @@ class IngestResponse(BaseModel):
     error_details: list[dict[str, str]] = Field(default_factory=list)
 
 
-# ─── Documents ───────────────────────────────────────────────────────────────
+
 
 class DocumentListResponse(BaseModel):
     """Response body for /documents."""
@@ -78,7 +78,7 @@ class DocumentListResponse(BaseModel):
     sources: list[str]
 
 
-# ─── Health ──────────────────────────────────────────────────────────────────
+
 
 class HealthResponse(BaseModel):
     """Response body for /health."""
@@ -87,7 +87,7 @@ class HealthResponse(BaseModel):
     components: dict[str, Any] = Field(default_factory=dict)
 
 
-# ─── Errors ──────────────────────────────────────────────────────────────────
+
 
 class ErrorResponse(BaseModel):
     """Standardized error response."""
